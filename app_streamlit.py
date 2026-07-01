@@ -104,7 +104,7 @@ col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     st.markdown("""
     <div class="header-container">
-        <h1 class="header-title">Ff SHL Assessment Recommender</h1>
+        <h1 class="header-title"> SHL Assessment Recommender</h1>
         <p class="header-subtitle">Find the Perfect Assessment for Your Hiring Needs</p>
     </div>
     """, unsafe_allow_html=True)
@@ -113,12 +113,12 @@ with col2:
 with st.sidebar:
     st.markdown("""
     <div style="text-align: center; padding: 20px; background: rgba(0, 61, 46, 0.1); border-radius: 12px; margin-bottom: 20px;">
-        <h3 style="color: #003D2E; margin-top: 0;">Ff How to Use</h3>
+        <h3 style="color: #003D2E; margin-top: 0;"> How to Use</h3>
         <p style="color: #666; font-size: 0.95em;">
-            1️⃣ Describe the role you're hiring for<br>
-            2️⃣ Answer my clarifying questions<br>
-            3️⃣ I'll recommend 1–10 real SHL tests<br>
-            4️⃣ Click the links to view details
+        1️⃣ Describe the role you're hiring for<br>
+        2️⃣ Answer my clarifying questions<br>
+        3️⃣ I'll recommend 1–10 real SHL tests<br>
+        4️⃣ Click the links to view details
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -155,14 +155,14 @@ for msg in st.session_state.messages:
     else:
         st.markdown(f"""
         <div class="chat-bot">
-            <strong>Ff Bot:</strong> {msg['content']}
+            <strong> Bot:</strong> {msg['content']}
         </div>
         """, unsafe_allow_html=True)
         
         # Show recommendations if they exist
         if "recommendations" in msg and msg["recommendations"]:
             st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
-            st.markdown("<h4 style='color: #003D2E;'>Ff Recommended Assessments:</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #003D2E;'> Recommended Assessments:</h4>", unsafe_allow_html=True)
             
             for i, rec in enumerate(msg["recommendations"], 1):
                 st.markdown(f"""
@@ -239,14 +239,14 @@ with st.container():
         else:
             st.markdown(f"""
             <div class="chat-bot">
-                <strong>Ff Bot:</strong> {msg['content']}
+                <strong> Bot:</strong> {msg['content']}
             </div>
             """, unsafe_allow_html=True)
             
             # Show recommendations if they exist
             if "recommendations" in msg and msg["recommendations"]:
                 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-                st.markdown("<h4 style='color: var(--primary-dark);'>Ff Recommended Assessments:</h4>", unsafe_allow_html=True)
+                st.markdown("<h4 style='color: var(--primary-dark);'> Recommended Assessments:</h4>", unsafe_allow_html=True)
                 
                 for i, rec in enumerate(msg["recommendations"], 1):
                     st.markdown(f"""
