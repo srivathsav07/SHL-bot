@@ -1,88 +1,140 @@
 import json
+import os
+import requests
 
-# Load catalog once (at the top, so it's fast)
+CATALOG = None
+
 def load_catalog():
     """Read all SHL tests from the catalog file"""
+    global CATALOG
     with open('data/shl_tests.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
+        CATALOG = json.load(f)
+    return CATALOG
 
 CATALOG = load_catalog()
 
 def get_bot_response(messages):
-    """
-    This function is the BRAIN of the bot.
+    """Use OpenRouter to recommend SHL assessments"""
     
-    Input: List of all messages so far
-    Output: What the bot should say + which tests to recommend
-    """
+    # Get API key
+    api_key = os.getenv('OPENROUTER_API_KEY')
+    if not api_key:
+        api_key = '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'
     
-    # Get the most recent user message
+    # Build catalog summary (first 20 tests)
+    catalog_summary = json.dumps(CATALOG[:20], indent=2)
+    
+    system_prompt = f"""You are an SHL Assessment Recommender bot.
+
+CATALOG (20 sample tests):
+{catalog_summary}
+
+TASK:
+1. Understand user's hiring need
+2. If vague, ask clarifying questions
+3. Recommend 1-10 real tests from catalog
+4. Return ONLY valid JSON (no markdown, no extra text)
+
+RESPONSE FORMAT (MUST be valid JSON only):
+{{"reply": "Your response", "recommendations": [{{"name": "test name", "url": "https://...", "test_type": "type"}}], "end_of_conversation": false}}
+
+Rules:
+- ONLY return JSON
+- recommendations array: empty if gathering info, 1-10 if recommending
+- All URLs must be from catalog above
+- end_of_conversation: true only when user satisfied
+"""
+    
+    try:
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "HTTP-Referer": "https://shl-bot.onrender.com",
+                "X-Title": "SHL Assessment Bot"
+            },
+            json={
+                "model": "openrouter/auto",
+                "messages": messages,
+                "system": system_prompt,
+                "max_tokens": 1000,
+                "temperature": 0.3  # Lower temp for more consistent JSON
+            },
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            print(f"OpenRouter error: {response.status_code} - {response.text}")
+            return {
+                "reply": "I'm having trouble connecting. Please try again.",
+                "recommendations": [],
+                "end_of_conversation": False
+            }
+        
+        result = response.json()
+        bot_text = result["choices"][0]["message"]["content"].strip()
+        
+        # Try to parse JSON response
+        try:
+            parsed = json.loads(bot_text)
+            return parsed
+        except json.JSONDecodeError:
+            print(f"Failed to parse JSON: {bot_text}")
+            # Fallback to keyword matching
+            return fallback_recommendation(messages)
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return fallback_recommendation(messages)
+
+
+def fallback_recommendation(messages):
+    """Fallback to keyword matching if LLM fails"""
     last_user_message = messages[-1]["content"] if messages else ""
-    
-    # Count how many times the user has spoken (to know which turn we're on)
     user_turn_count = len([m for m in messages if m["role"] == "user"])
     
-    print(f"[DEBUG] Turn {user_turn_count}, User said: {last_user_message}")
-    
-    # ===== DECISION LOGIC =====
-    
-    # Check if user mentioned a specific technology or role
     tech_keywords = ["java", "python", "javascript", "c#", "c++", "ruby", "php", "go", "rust", ".net"]
     mentioned_tech = [tech for tech in tech_keywords if tech in last_user_message.lower()]
     
-    # If user mentioned a specific tech, recommend immediately
     if mentioned_tech:
         tech = mentioned_tech[0]
-        # Filter catalog for tech-related tests
         tech_tests = [t for t in CATALOG if tech in t.get("name", "").lower()]
         
-        reply_text = (
-            f"Great! I found {len(tech_tests)} assessments related to {tech.upper()}. "
-            f"Here are my top picks:"
-        )
-        
-        # Build recommendations (max 10)
-        recommendations = []
-        for test in tech_tests[:10]:
-            recommendations.append({
+        recommendations = [
+            {
                 "name": test.get("name", "Unknown"),
                 "url": test.get("link", "#"),
                 "test_type": test.get("keys", ["K"])[0] if test.get("keys") else "K"
-            })
+            }
+            for test in tech_tests[:10]
+        ]
         
-        end_conversation = False
+        return {
+            "reply": f"Great! I found {len(tech_tests)} assessments related to {tech.upper()}. Here are my top picks:",
+            "recommendations": recommendations,
+            "end_of_conversation": False
+        }
     
-    # If it's the first turn and message is vague (no tech, no role mentioned)
-    elif user_turn_count == 1 and len(last_user_message) < 50:
-        reply_text = (
-            "Hi! I'd love to help you find the right assessment. To get started, could you tell me:\n\n"
-            "1. **What role** are you hiring for? (e.g., Java Developer, Python Engineer, Manager)\n"
-            "2. **What's the seniority level?** (e.g., Junior, Mid, Senior)\n\n"
-            "Once I know this, I can recommend the perfect tests!"
-        )
-        recommendations = []
-        end_conversation = False
+    elif user_turn_count == 1:
+        return {
+            "reply": "Hi! I'd love to help. Could you tell me: 1. What role are you hiring for? 2. What's the seniority level?",
+            "recommendations": [],
+            "end_of_conversation": False
+        }
     
-    # If user says they're done
-    elif any(word in last_user_message.lower() for word in ["done", "perfect", "thanks", "that's it", "goodbye"]):
-        reply_text = "Excellent! You're all set with your recommendations. Good luck with your hiring!"
-        recommendations = []
-        end_conversation = True
-    
-    # Default: ask more questions
     else:
-        reply_text = (
-            "Thanks for that info! To narrow down further, could you tell me:\n\n"
-            "- **What skills** matter most? (e.g., problem-solving, communication, technical)\n"
-            "- **What language** should the test be in?\n\n"
-            "This will help me give you more precise recommendations."
-        )
-        recommendations = []
-        end_conversation = False
+        return {
+            "reply": "Thanks for that info! Could you tell me what skills matter most?",
+            "recommendations": [],
+            "end_of_conversation": False
+        }
+
+
+if __name__ == "__main__":
+    test_messages = [
+        {"role": "user", "content": "I need an assessment for Java developers"}
+    ]
     
-    # Return everything in the format your API expects
-    return {
-        "reply": reply_text,
-        "recommendations": recommendations,
-        "end_of_conversation": end_conversation
-    }
+    result = get_bot_response(test_messages)
+    print("\n[BOT RESPONSE]")
+    print(json.dumps(result, indent=2))
